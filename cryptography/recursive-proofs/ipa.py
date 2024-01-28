@@ -18,9 +18,13 @@ Notation: The curve is defined over Fp, with a subrgoup of order r.
 
 class IPACommitment():
     def __init__(self, r, p, E, k):
+        ## constant: order of elliptic curve 
         self.r = r
+        ## type: scalar field
         self.Fr = GF(r)
+        ## type: polynomial over scalar field
         self.FrX = self.Fr['X']
+
         self.p = p
         self.Fp = GF(p)
         self.FpY = self.Fp['Y']
@@ -68,28 +72,35 @@ class IPACommitment():
         # compute a proof pi of the evaluation of `polynomial` at `x`.
         
         # polynomial that is 0 at x
+        ###### mask polynomial
         s = self.FrX([self.Fr.random_element() for i in range(self.d)])
         v_prime = s(x)
         s -= v_prime
         assert s(x) == 0
     
         # commitment for s
+        ##### commit for mask polynomial
         s_b = self.Fr.random_element()
         C_s = self.inner_product(s.list() + [s_b], self.G_bold + [self.H])
         
         # challenges
+        ##### challenge for masking (randomize) target polynomial
         iota = self.Fr(self.rho(C_s))
         z = self.Fr(self.rho(iota))
 
+        ##### masking (randomize) target polynomial before IPA protocol
         final_poly = s * iota + polynomial
         v = final_poly(x)
         final_poly -= v
         blind = s_b*iota + rand
     
+        ##### padding target polynomials
         a = final_poly.list()
         while len(a) < self.d :
             a = a + [0]
         aa = a
+
+        ##### compute witness vector, power of x
         b = [1]
         for i in range(1, self.d):
             b.append(b[-1] * x)
@@ -101,25 +112,31 @@ class IPACommitment():
         rand_l = []
         rand_r = []
 
+        ###### sample a base point for subsequent compression process
         U = ZZ(self.Fr(self.rho(x))) * self.Egen
 
         size = 1<<self.k
         for j in range(self.k)[::-1]:
             size = size // 2
+            ###### cross term of a * G
             l = self.inner_product(a[size:], G[:size])
             r = self.inner_product(a[:size], G[size:])
+            ###### cross term of a * b
             value_l = self.inner_product(a[size:], b[:size])
             value_r = self.inner_product(a[:size], b[size:])
             l_rand = ZZ(self.Fr.random_element())
             r_rand = ZZ(self.Fr.random_element())
+            ###### aggregate cross terms of a * G and a * b
             l += ZZ(value_l*z) * U + l_rand * H
             r += ZZ(value_r*z) * U + r_rand * H
             L.append(l)
             R.append(r)
     
+            ###### folding factor for a, b and G
             challenge = self.Fr(self.rho(L))
             challenge_inv = challenge**-1
     
+            ###### fold a, b, and G
             a_new = []
             b_new = []
             G_new = []
@@ -130,6 +147,7 @@ class IPACommitment():
             a = a_new
             b = b_new
             G = G_new
+            ###### fold blinds 
             blind += l_rand * challenge_inv
             blind += r_rand * challenge
             rand_l.append(l_rand)
